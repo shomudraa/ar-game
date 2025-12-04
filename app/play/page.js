@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { CameraKitView } from "./CameraKitView";
 
 export default function PlayPage() {
+  console.log("✅ PlayPage rendered");
+
   const [step, setStep] = useState("form"); // "form" | "game" | "done"
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -23,6 +25,7 @@ export default function PlayPage() {
       stored = "player_" + Math.random().toString(36).slice(2);
       window.localStorage.setItem("player_id", stored);
     }
+    console.log("🆔 Player ID:", stored);
     setPlayerId(stored);
   }, []);
 
@@ -36,13 +39,17 @@ export default function PlayPage() {
       return;
     }
 
+    console.log("🚀 Starting game for:", { name, email });
     setStep("game");
   };
 
   // SAVE SCORE TO SUPABASE
   const handleGameOver = async (score) => {
+    console.log("💾 handleGameOver called with score:", score);
+
     if (!playerId) {
       setError("Player ID not ready. Refresh the page.");
+      console.error("❌ No playerId when saving score");
       return;
     }
 
@@ -51,15 +58,27 @@ export default function PlayPage() {
     setCurrentScore(score);
 
     try {
-      const { error: insertError } = await supabase.from("scores").insert({
+      console.log("📤 Inserting into Supabase:", {
         player_id: playerId,
         name,
         email,
         score,
       });
 
+      const { data: insertData, error: insertError } = await supabase
+        .from("scores")
+        .insert({
+          player_id: playerId,
+          name,
+          email,
+          score,
+        })
+        .select();
+
+      console.log("📥 Supabase insert result:", { insertData, insertError });
+
       if (insertError) {
-        console.log("Supabase insert error:", insertError);
+        console.error("❌ Supabase insert error:", insertError);
         setError(insertError.message || "Could not save score.");
         setIsSaving(false);
         return;
@@ -72,8 +91,13 @@ export default function PlayPage() {
         .order("score", { ascending: false })
         .limit(10);
 
+      console.log("📊 Supabase leaderboard result:", {
+        data,
+        selectError,
+      });
+
       if (selectError) {
-        console.log("Supabase leaderboard error:", selectError);
+        console.error("❌ Supabase leaderboard error:", selectError);
         setError(selectError.message || "Could not load leaderboard.");
       } else {
         setLeaderboard(data || []);
@@ -81,17 +105,11 @@ export default function PlayPage() {
 
       setStep("done");
     } catch (err) {
-      console.log("Unexpected Supabase error:", err);
+      console.error("❌ Unexpected Supabase error:", err);
       setError("Unexpected error saving score.");
     } finally {
       setIsSaving(false);
     }
-  };
-
-  // For now — fake score from the CameraKit test button
-  const simulateGameOver = () => {
-    const randomScore = Math.floor(Math.random() * 100);
-    handleGameOver(randomScore);
   };
 
   return (
@@ -160,22 +178,29 @@ export default function PlayPage() {
               </p>
 
               <CameraKitView
-                onReady={() => console.log("Camera Kit Ready")}
-                onError={(err) => setError(err.message || "Camera failed to start")}
+                onReady={() => console.log("📸 Camera Kit Ready")}
+                onError={(err) =>
+                  setError(err.message || "Camera failed to start")
+                }
+                onScore={(score) => {
+                  console.log("🎯 REAL score from Lens (onScore):", score);
+                  handleGameOver(score);
+                }}
               />
-            </div>
 
-            {/* TEST BUTTON (REMOVE AFTER REAL SCORE EVENTS) */}
-            <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 shadow-xl">
-              <h3 className="text-lg font-semibold mb-2">Test: Simulate score</h3>
-
+              {/* 🔥 TEMP: TEST BUTTON TO CHECK SUPABASE ONLY */}
               <button
-                onClick={simulateGameOver}
-                disabled={isSaving}
-                className="inline-flex items-center px-5 py-2.5 rounded-full bg-green-500 hover:bg-green-400 disabled:opacity-60 font-medium text-sm transition"
+                onClick={() => handleGameOver(42)}
+                className="mt-4 inline-flex items-center px-4 py-2 rounded-full bg-green-500 hover:bg-green-400 text-sm font-medium transition"
               >
-                {isSaving ? "Saving..." : "Simulate Game Over"}
+                Test Save Score = 42
               </button>
+
+              {isSaving && (
+                <p className="text-sm text-gray-400 mt-3">
+                  Saving score…
+                </p>
+              )}
 
               {error && (
                 <p className="text-sm text-red-400 mt-3">{error}</p>
@@ -194,7 +219,9 @@ export default function PlayPage() {
               <p className="text-gray-300 mb-2">
                 Final score for <span className="font-semibold">{name}</span>:
               </p>
-              <p className="text-4xl font-extrabold text-indigo-400">{currentScore}</p>
+              <p className="text-4xl font-extrabold text-indigo-400">
+                {currentScore}
+              </p>
 
               <button
                 onClick={() => setStep("game")}
@@ -218,10 +245,14 @@ export default function PlayPage() {
                       className="flex items-center justify-between bg-black/40 rounded-xl px-3 py-2 border border-gray-800"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="w-6 text-gray-400">#{index + 1}</span>
+                        <span className="w-6 text-gray-400">
+                          #{index + 1}
+                        </span>
                         <div>
                           <p className="font-medium">{row.name}</p>
-                          <p className="text-xs text-gray-400">{row.email}</p>
+                          <p className="text-xs text-gray-400">
+                            {row.email}
+                          </p>
                         </div>
                       </div>
 
