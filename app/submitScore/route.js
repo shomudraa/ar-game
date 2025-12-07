@@ -9,13 +9,13 @@ export async function POST(request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     );
 
-    // 2. Identify the User (Security Check)
-    // We get the token from the "Authorization" header sent by your Website
+    // 2. Security Check: Get the User from the Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
         return NextResponse.json({ error: "No Auth Token found" }, { status: 401 });
     }
 
+    // Verify the token with Supabase Auth
     const { data: { user }, error: authError } = await supabase.auth.getUser(
         authHeader.replace('Bearer ', '')
     );
@@ -24,19 +24,23 @@ export async function POST(request) {
       return NextResponse.json({ error: "Unauthorized User" }, { status: 401 });
     }
 
-    // 3. Get the Score (FROM JSON, not URL)
-    // Your Lens sends { "score": 10 }
+    // 3. Get the Score from the Request Body
     const body = await request.json();
     const { score } = body;
 
-    // 4. Insert into YOUR 'scores' table (Matches your screenshot)
+    if (score === undefined || score === null) {
+        return NextResponse.json({ error: "No score provided" }, { status: 400 });
+    }
+
+    // 4. Save to Database
+    // (Matches your 'scores' table screenshot exactly)
     const { error: insertError } = await supabase
-      .from("scores") // <--- Matches your table name
+      .from("scores") 
       .insert({
-        player_id: user.id,                      // The User's ID
-        name: user.user_metadata.full_name,      // The Name they typed in login
-        email: user.user_metadata.email_contact, // The Email they typed
-        score: parseInt(score),                  // The Score from the game
+        player_id: user.id,                      // Matches 'player_id' column
+        name: user.user_metadata.full_name,      // Matches 'name' column
+        email: user.user_metadata.email_contact, // Matches 'email' column
+        score: parseInt(score),                  // Matches 'score' column
       });
 
     if (insertError) {
@@ -44,8 +48,8 @@ export async function POST(request) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
-    console.log(`✅ Saved score for ${user.user_metadata.full_name}: ${score}`);
-    return NextResponse.json({ ok: true, score }, { status: 200 });
+    console.log(`✅ Score saved: ${score} for ${user.user_metadata.full_name}`);
+    return NextResponse.json({ ok: true }, { status: 200 });
 
   } catch (err) {
     console.error("💥 Server Error:", err);
